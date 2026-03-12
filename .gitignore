@@ -1,0 +1,126 @@
+# =========================
+# Node Modules
+# =========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# Logs
+# =========================
+logs
+*.log
+
+# =========================
+# Runtime Data
+# =========================
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# =========================
+# Dependency directories
+# =========================
+jspm_packages/
+
+# =========================
+# Environment Variables
+# =========================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# =========================
+# Build folders
+# =========================
+build/
+dist/
+.next/
+out/
+
+# React specific
+frontend/build/
+frontend/.cache/
+
+# =========================
+# Coverage directory
+# =========================
+coverage/
+
+# =========================
+# Parcel / Vite cache
+# =========================
+.cache/
+.vite/
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# IDE / Editor folders
+# =========================
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# =========================
+# Temporary files
+# =========================
+tmp/
+temp/
+
+# =========================
+# MongoDB
+# =========================
+*.mongodb
+
+# =========================
+# Misc
+# =========================
+*.local
+
+# =========================
+# Node build artifacts
+# =========================
+*.tsbuildinfo
+
+# =========================
+# Uploads / Static files
+# =========================
+uploads/
+public/uploads/
+
+# =========================
+# Docker
+# =========================
+.dockerignore
+docker-compose.override.yml
+
+# =========================
+# Testing
+# =========================
+coverage/
+.nyc_output/
+
+# =========================
+# Mac files
+# =========================
+.AppleDouble
+.LSOverride
+
+# =========================
+# Windows files
+# =========================
+ehthumbs.db
+Desktop.ini
