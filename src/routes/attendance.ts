@@ -74,13 +74,16 @@ router.post('/checkin', async (req: Request, res: Response): Promise<void> => {
     // Ensure table exists
     await ensureAttendanceTable();
 
+    const now = new Date();
+    const localDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
     // Check if employee already has an incomplete attendance for today (checked in but not checked out)
     const [existing] = await pool.execute(
       `SELECT id FROM attendance 
-       WHERE employee_id = ? AND DATE(check_in_time) = CURDATE() 
+       WHERE employee_id = ? AND date = ? 
        AND check_out_time IS NULL
        LIMIT 1`,
-      [employeeId]
+      [employeeId, localDateStr]
     );
 
     const existingRecords = existing as any[];
@@ -96,10 +99,10 @@ router.post('/checkin', async (req: Request, res: Response): Promise<void> => {
     // Check if employee already completed attendance today (checked out)
     const [completed] = await pool.execute(
       `SELECT id FROM attendance 
-       WHERE employee_id = ? AND DATE(check_in_time) = CURDATE() 
+       WHERE employee_id = ? AND date = ? 
        AND check_out_time IS NOT NULL
        LIMIT 1`,
-      [employeeId]
+      [employeeId, localDateStr]
     );
 
     const completedRecords = completed as any[];
@@ -111,14 +114,10 @@ router.post('/checkin', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const now = new Date();
-    // Use ISO string to reliably extract current UTC date for the "date" column
-    const dateStr = now.toISOString().split('T')[0];
-
     // Insert attendance record with check-in time, date, and initial status
     const [result] = await pool.execute(
       `INSERT INTO attendance (employee_id, date, check_in_time, status) VALUES (?, ?, ?, 'checked_in')`,
-      [employeeId, dateStr, now]
+      [employeeId, localDateStr, now]
     );
 
     const insertId = (result as any).insertId;
@@ -172,13 +171,16 @@ router.post('/checkout', async (req: Request, res: Response): Promise<void> => {
     // Ensure table exists
     await ensureAttendanceTable();
 
+    const now = new Date();
+    const localDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
     // Find the active check-in for today
     const [existing] = await pool.execute(
       `SELECT id, check_in_time FROM attendance 
-       WHERE employee_id = ? AND DATE(check_in_time) = CURDATE() 
+       WHERE employee_id = ? AND date = ? 
        AND check_out_time IS NULL
        ORDER BY check_in_time DESC LIMIT 1`,
-      [employeeId]
+      [employeeId, localDateStr]
     );
 
     const existingRecords = existing as any[];
@@ -192,7 +194,6 @@ router.post('/checkout', async (req: Request, res: Response): Promise<void> => {
 
     const record = existingRecords[0];
     const checkInDate = new Date(record.check_in_time);
-    const now = new Date();
 
     // Calculate total time securely
     const diffMs = now.getTime() - checkInDate.getTime();
@@ -257,12 +258,15 @@ router.get('/today', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    const now = new Date();
+    const localDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
     // First check if there's ANY attendance record for today
     const [allRows] = await pool.execute(
       `SELECT id, check_in_time, check_out_time FROM attendance 
-       WHERE employee_id = ? AND DATE(check_in_time) = CURDATE() 
+       WHERE employee_id = ? AND date = ? 
        ORDER BY check_in_time DESC`,
-      [employeeId]
+      [employeeId, localDateStr]
     );
     
     const allAttendance = allRows as any[];
@@ -319,7 +323,7 @@ router.get('/today', async (req: Request, res: Response): Promise<void> => {
 // GET /api/attendance - Get all attendance records (for admin)
 router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { date, employeeId } = req.query;
+    const { date, employeeId, fromDate, toDate } = req.query;
 
     const pool = getPool();
     if (!pool) {
@@ -334,6 +338,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       SELECT 
         a.id,
         a.employee_id,
+        DATE_FORMAT(a.date, '%Y-%m-%d') as date,
         a.check_in_time,
         a.check_out_time,
         a.total_time,
@@ -348,8 +353,19 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     `;
     const params: any[] = [];
 
-    if (date) {
-      query += ' AND DATE(a.check_in_time) = ?';
+    // Support single date, date range, or both
+    if (fromDate && toDate) {
+      query += ' AND a.date BETWEEN ? AND ?';
+      params.push(fromDate, toDate);
+    } else if (fromDate) {
+      query += ' AND a.date >= ?';
+      params.push(fromDate);
+    } else if (toDate) {
+      query += ' AND a.date <= ?';
+      params.push(toDate);
+    } else if (date) {
+      // Legacy single date support
+      query += ' AND a.date = ?';
       params.push(date);
     }
 
