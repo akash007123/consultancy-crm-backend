@@ -123,15 +123,22 @@ router.get('/today', async (req: Request, res: Response): Promise<void> => {
         success: true,
         data: {
           attendance: null,
+          hasCheckedIn: false,
+          hasCompletedToday: false,
         },
       });
       return;
     }
 
+    const todayRecord = attendance[0];
+    const hasCheckedOut = !!todayRecord.check_out_time;
+
     res.json({
       success: true,
       data: {
-        attendance: attendance[0],
+        attendance: todayRecord,
+        hasCheckedIn: true,
+        hasCompletedToday: hasCheckedOut,
       },
     });
   } catch (error) {
@@ -158,20 +165,35 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    let query = 'SELECT * FROM attendance WHERE 1=1';
+    let query = `
+      SELECT 
+        a.id,
+        a.employee_id,
+        a.check_in_time,
+        a.check_out_time,
+        a.total_time,
+        a.report,
+        a.created_at,
+        e.first_name,
+        e.last_name,
+        e.department
+      FROM attendance a
+      LEFT JOIN employees e ON a.employee_id = e.id
+      WHERE 1=1
+    `;
     const params: any[] = [];
 
     if (date) {
-      query += ' AND DATE(check_in_time) = ?';
+      query += ' AND DATE(a.check_in_time) = ?';
       params.push(date);
     }
 
     if (employeeId) {
-      query += ' AND employee_id = ?';
+      query += ' AND a.employee_id = ?';
       params.push(employeeId);
     }
 
-    query += ' ORDER BY check_in_time DESC';
+    query += ' ORDER BY a.check_in_time DESC';
 
     const [rows] = await pool.execute(query, params);
 
