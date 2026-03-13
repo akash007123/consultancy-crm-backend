@@ -213,18 +213,33 @@ router.post('/signup', async (req: Request, res: Response, next: NextFunction) =
 
 /**
  * GET /api/auth/me
- * Get current user (protected route)
+ * Get current user (protected route) - works for both users and employees
  */
 router.get('/me', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    const response: ApiResponse = {
-      success: true,
-      data: {
-        user: req.user,
-      },
-    };
-
-    res.status(200).json(response);
+    // Check if it's a regular user or an employee
+    if (req.user) {
+      const response: ApiResponse = {
+        success: true,
+        data: {
+          user: req.user,
+        },
+      };
+      return res.status(200).json(response);
+    }
+    
+    // It's an employee
+    if (req.employee) {
+      const response: ApiResponse = {
+        success: true,
+        data: {
+          employee: req.employee,
+        },
+      };
+      return res.status(200).json(response);
+    }
+    
+    throw new AppError('User not found', 404);
   } catch (error) {
     next(error);
   }

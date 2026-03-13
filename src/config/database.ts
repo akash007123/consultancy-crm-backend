@@ -121,7 +121,7 @@ async function createTables(connection: mysql.PoolConnection): Promise<void> {
       instagram VARCHAR(255),
       other_social TEXT,
       password VARCHAR(255) NOT NULL,
-      profile_photo TEXT,
+      profile_photo LONGTEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX idx_employee_code (employee_code),
@@ -131,6 +131,13 @@ async function createTables(connection: mysql.PoolConnection): Promise<void> {
       INDEX idx_status (status)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+
+  // Update profile_photo column to LONGTEXT if it exists (for existing databases)
+  await connection.execute(`
+    ALTER TABLE employees MODIFY COLUMN profile_photo LONGTEXT
+  `).catch(() => {
+    // Ignore error if column doesn't exist or already LONGTEXT
+  });
 
   console.log('Database tables verified/created');
 }

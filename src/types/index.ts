@@ -148,6 +148,7 @@ export interface CreateEmployeeRequest {
   instagram?: string;
   otherSocial?: string;
   password: string;
+  profilePhoto?: string;
 }
 
 export interface UpdateEmployeeRequest extends Partial<CreateEmployeeRequest> {

@@ -48,6 +48,7 @@ const createEmployeeSchema = z.object({
   instagram: z.string().optional(),
   otherSocial: z.string().optional(),
   password: z.string().min(6, 'Password must be at least 6 characters'),
+  profilePhoto: z.string().optional(),
 });
 
 // Validation schema for updating employee
@@ -77,6 +78,7 @@ const updateEmployeeSchema = z.object({
   instagram: z.string().optional(),
   otherSocial: z.string().optional(),
   password: z.string().min(6).optional(),
+  profilePhoto: z.string().optional(),
 });
 
 // Format database row to EmployeeWithoutPassword
@@ -237,8 +239,8 @@ router.post('/', authenticate, async (req: AuthenticatedRequest, res: Response, 
         employee_code, first_name, last_name, email, gender, date_of_birth,
         joining_date, department, role, status, mobile1, mobile2, address,
         bank_account_name, bank_account_number, bank_name, ifsc_code, bank_address,
-        facebook, twitter, linkedin, instagram, other_social, password
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        facebook, twitter, linkedin, instagram, other_social, password, profile_photo
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         validatedData.employeeCode,
         validatedData.firstName,
@@ -264,6 +266,7 @@ router.post('/', authenticate, async (req: AuthenticatedRequest, res: Response, 
         validatedData.instagram || null,
         validatedData.otherSocial || null,
         hashedPassword,
+        validatedData.profilePhoto || null,
       ]
     );
 
@@ -422,6 +425,10 @@ router.put('/:id', authenticate, async (req: AuthenticatedRequest, res: Response
     if (validatedData.otherSocial !== undefined) {
       updates.push('other_social = ?');
       params.push(validatedData.otherSocial);
+    }
+    if (validatedData.profilePhoto !== undefined) {
+      updates.push('profile_photo = ?');
+      params.push(validatedData.profilePhoto);
     }
     if (validatedData.password) {
       updates.push('password = ?');

@@ -12,6 +12,38 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 export interface AuthenticatedRequest extends Request {
   user?: UserWithoutPassword;
+  employee?: {
+    id: number;
+    employeeCode: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    mobile1: string;
+    role: string;
+    isActive: boolean;
+  };
+}
+
+// Check if token belongs to an employee
+async function getEmployeeById(employeeId: number) {
+  const pool = getPool();
+  const [rows] = await pool.execute(
+    'SELECT id, employee_code, first_name, last_name, email, mobile1, role, status FROM employees WHERE id = ?',
+    [employeeId]
+  );
+  
+  const employees = rows as Array<{
+    id: number;
+    employee_code: string;
+    first_name: string;
+    last_name: string;
+    email: string;
+    mobile1: string;
+    role: string;
+    status: string;
+  }>;
+  
+  return employees.length > 0 ? employees[0] : null;
 }
 
 export const authenticate = async (
@@ -31,35 +63,59 @@ export const authenticate = async (
     // Verify the token
     const decoded = jwt.verify(token, JWT_SECRET) as TokenPayload;
 
-    // Get user from database
     const pool = getPool();
-    const [rows] = await pool.execute(
-      'SELECT id, name, email, mobile, role, is_active, created_at, updated_at FROM users WHERE id = ?',
+    
+    // First try to find user in users table
+    const [userRows] = await pool.execute(
+      'SELECT id, name, email, mobile, role, is_active AS isActive, created_at AS createdAt, updated_at AS updatedAt FROM users WHERE id = ?',
       [decoded.userId]
     );
 
-    const users = rows as UserWithoutPassword[];
+    const users = userRows as UserWithoutPassword[];
 
-    if (users.length === 0) {
+    if (users.length > 0) {
+      const user = users[0];
+
+      if (!user.isActive) {
+        throw new AppError('User account is disabled', 401);
+      }
+
+      // Attach user to request
+      req.user = {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        mobile: user.mobile,
+        role: user.role,
+        isActive: user.isActive,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      };
+      
+      return next();
+    }
+
+    // If not found in users, try employees table
+    const employee = await getEmployeeById(decoded.userId);
+    
+    if (!employee) {
       throw new AppError('User not found', 401);
     }
 
-    const user = users[0];
-
-    if (!user.isActive) {
-      throw new AppError('User account is disabled', 401);
+    if (employee.status !== 'active') {
+      throw new AppError('Employee account is disabled', 401);
     }
 
-    // Attach user to request
-    req.user = {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      mobile: user.mobile,
-      role: user.role,
-      isActive: user.isActive,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
+    // Attach employee to request
+    req.employee = {
+      id: employee.id,
+      employeeCode: employee.employee_code,
+      firstName: employee.first_name,
+      lastName: employee.last_name,
+      email: employee.email,
+      mobile1: employee.mobile1,
+      role: employee.role,
+      isActive: employee.status === 'active',
     };
 
     next();
