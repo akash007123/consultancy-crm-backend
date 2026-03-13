@@ -27,6 +27,10 @@ export interface AuthenticatedRequest extends Request {
     role: string;
     isActive: boolean;
   };
+  headers: Record<string, string | string[] | undefined>;
+  body: any;
+  params: Record<string, string>;
+  query: Record<string, any>;
 }
 
 // Check if token belongs to an employee
@@ -57,7 +61,7 @@ export const authenticate = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const authHeader = req.headers.authorization;
+    const authHeader = req.headers.authorization as string | undefined;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       throw new AppError('No token provided', 401);
