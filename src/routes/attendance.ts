@@ -27,6 +27,100 @@ async function ensureAttendanceTable(): Promise<void> {
   `);
 }
 
+// POST /api/attendance/checkin - Record check-in time
+router.post('/checkin', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { employeeId, checkInTime } = req.body;
+
+    // Validate required fields
+    if (!employeeId || !checkInTime) {
+      res.status(400).json({
+        success: false,
+        message: 'Missing required fields: employeeId, checkInTime',
+      });
+      return;
+    }
+
+    const pool = getPool();
+    if (!pool) {
+      res.status(500).json({
+        success: false,
+        message: 'Database not connected',
+      });
+      return;
+    }
+
+    // Ensure table exists
+    await ensureAttendanceTable();
+
+    // Check if employee already has an incomplete attendance for today (checked in but not checked out)
+    const [existing] = await pool.execute(
+      `SELECT id FROM attendance 
+       WHERE employee_id = ? AND DATE(check_in_time) = CURDATE() 
+       AND check_out_time IS NULL
+       LIMIT 1`,
+      [employeeId]
+    );
+
+    const existingRecords = existing as any[];
+    if (existingRecords.length > 0) {
+      // Employee already has an active check-in for today
+      res.status(400).json({
+        success: false,
+        message: 'You have already checked in today. Please check out first.',
+      });
+      return;
+    }
+
+    // Check if employee already completed attendance today (checked out)
+    const [completed] = await pool.execute(
+      `SELECT id FROM attendance 
+       WHERE employee_id = ? AND DATE(check_in_time) = CURDATE() 
+       AND check_out_time IS NOT NULL
+       LIMIT 1`,
+      [employeeId]
+    );
+
+    const completedRecords = completed as any[];
+    if (completedRecords.length > 0) {
+      res.status(400).json({
+        success: false,
+        message: 'You have already completed your attendance for today. Check-in will be available from tomorrow.',
+      });
+      return;
+    }
+
+    // Insert attendance record with check-in time
+    const [result] = await pool.execute(
+      `INSERT INTO attendance (employee_id, check_in_time) VALUES (?, ?)`,
+      [employeeId, checkInTime]
+    );
+
+    const insertId = (result as any).insertId;
+
+    res.status(201).json({
+      success: true,
+      message: 'Check-in recorded successfully',
+      data: {
+        attendance: {
+          id: insertId,
+          employeeId,
+          checkInTime,
+        },
+        hasCheckedIn: true,
+        hasCompletedToday: false,
+      },
+    });
+  } catch (error) {
+    console.error('Check-in error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to record check-in',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
 // POST /api/attendance/checkout - Submit checkout with report
 router.post('/checkout', async (req: Request, res: Response): Promise<void> => {
   try {
@@ -91,6 +185,8 @@ router.post('/checkout', async (req: Request, res: Response): Promise<void> => {
 router.get('/today', async (req: Request, res: Response): Promise<void> => {
   try {
     const employeeId = req.headers['x-employee-id'] as string;
+    
+    console.log('[Attendance Today] Employee ID from header:', employeeId);
 
     if (!employeeId) {
       res.status(400).json({
@@ -109,16 +205,18 @@ router.get('/today', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const [rows] = await pool.execute(
-      `SELECT * FROM attendance 
+    // First check if there's ANY attendance record for today
+    const [allRows] = await pool.execute(
+      `SELECT id, check_in_time, check_out_time FROM attendance 
        WHERE employee_id = ? AND DATE(check_in_time) = CURDATE() 
-       ORDER BY check_in_time DESC LIMIT 1`,
+       ORDER BY check_in_time DESC`,
       [employeeId]
     );
+    
+    const allAttendance = allRows as any[];
+    console.log('[Attendance Today] All records for today:', allAttendance.length, allAttendance);
 
-    const attendance = rows as any[];
-
-    if (attendance.length === 0) {
+    if (allAttendance.length === 0) {
       res.json({
         success: true,
         data: {
@@ -130,15 +228,30 @@ router.get('/today', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const todayRecord = attendance[0];
-    const hasCheckedOut = !!todayRecord.check_out_time;
+    // Check if any record has check_out_time (meaning completed)
+    const completedRecord = allAttendance.find(record => record.check_out_time !== null);
+    
+    if (completedRecord) {
+      console.log('[Attendance Today] Found completed record:', completedRecord.id);
+      res.json({
+        success: true,
+        data: {
+          attendance: completedRecord,
+          hasCheckedIn: true,
+          hasCompletedToday: true,
+        },
+      });
+      return;
+    }
 
+    // Has checked in but not completed
+    const todayRecord = allAttendance[0];
     res.json({
       success: true,
       data: {
         attendance: todayRecord,
         hasCheckedIn: true,
-        hasCompletedToday: hasCheckedOut,
+        hasCompletedToday: false,
       },
     });
   } catch (error) {
