@@ -25,6 +25,32 @@ function getConfig(): DatabaseConfig {
   };
 }
 
+function getSSLConfig(): mysql.SslOptions | undefined {
+  const host = process.env.DB_HOST || 'localhost';
+  
+  // Skip SSL for local development
+  if (host === 'localhost' || host === '127.0.0.1') {
+    return undefined;
+  }
+  
+  // For TiDB Cloud serverless tier, SSL is required
+  const caCertPath = process.env.CA;
+  if (caCertPath) {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const resolvedPath = path.resolve(caCertPath);
+      return {
+        ca: fs.readFileSync(resolvedPath),
+      };
+    } catch (error) {
+      console.warn('Failed to load SSL certificate, using default SSL');
+      return {}; // Use default SSL if certificate file not found
+    }
+  }
+  return {}; // Enable SSL by default for remote databases
+}
+
 export async function connectDatabase(): Promise<void> {
   const config = getConfig();
   
@@ -33,6 +59,8 @@ export async function connectDatabase(): Promise<void> {
   console.log(`Database: ${config.database}`);
 
   try {
+    const sslConfig = getSSLConfig();
+    
     pool = mysql.createPool({
       host: config.host,
       port: config.port,
@@ -42,6 +70,7 @@ export async function connectDatabase(): Promise<void> {
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
+      ssl: sslConfig,
     });
 
     // Test the connection
