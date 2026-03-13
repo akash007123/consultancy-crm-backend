@@ -1,6 +1,6 @@
 // JWT Authentication middleware
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import jwt, { JsonWebTokenError, TokenExpiredError } from 'jsonwebtoken';
 import dotenv from 'dotenv';
 import { getPool } from '../config/database.js';
 import { UserWithoutPassword, TokenPayload } from '../types/index';
@@ -9,6 +9,11 @@ import { AppError } from './errorHandler';
 dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+
+// Extended token payload to include type
+interface ExtendedTokenPayload extends TokenPayload {
+  type?: string;
+}
 
 export interface AuthenticatedRequest extends Request {
   user?: UserWithoutPassword;
@@ -61,11 +66,38 @@ export const authenticate = async (
     const token = authHeader.substring(7);
 
     // Verify the token
-    const decoded = jwt.verify(token, JWT_SECRET) as TokenPayload;
+    const decoded = jwt.verify(token, JWT_SECRET) as ExtendedTokenPayload;
 
     const pool = getPool();
     
-    // First try to find user in users table
+    // If token type is 'employee', only check employees table
+    if (decoded.type === 'employee') {
+      const employee = await getEmployeeById(decoded.userId);
+      
+      if (!employee) {
+        throw new AppError('User not found', 401);
+      }
+
+      if (employee.status !== 'active') {
+        throw new AppError('Employee account is disabled', 401);
+      }
+
+      // Attach employee to request
+      req.employee = {
+        id: employee.id,
+        employeeCode: employee.employee_code,
+        firstName: employee.first_name,
+        lastName: employee.last_name,
+        email: employee.email,
+        mobile1: employee.mobile1,
+        role: employee.role,
+        isActive: employee.status === 'active',
+      };
+      
+      return next();
+    }
+    
+    // Otherwise (for regular users), first try to find user in users table
     const [userRows] = await pool.execute(
       'SELECT id, name, email, mobile, role, is_active AS isActive, created_at AS createdAt, updated_at AS updatedAt FROM users WHERE id = ?',
       [decoded.userId]
@@ -95,7 +127,7 @@ export const authenticate = async (
       return next();
     }
 
-    // If not found in users, try employees table
+    // If not found in users, try employees table (for backwards compatibility)
     const employee = await getEmployeeById(decoded.userId);
     
     if (!employee) {
@@ -120,9 +152,9 @@ export const authenticate = async (
 
     next();
   } catch (error) {
-    if (error instanceof jwt.JsonWebTokenError) {
+    if (error instanceof JsonWebTokenError) {
       next(new AppError('Invalid token', 401));
-    } else if (error instanceof jwt.TokenExpiredError) {
+    } else if (error instanceof TokenExpiredError) {
       next(new AppError('Token expired', 401));
     } else {
       next(error);

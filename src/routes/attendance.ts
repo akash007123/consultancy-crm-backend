@@ -22,7 +22,7 @@ async function ensureAttendanceTable(): Promise<void> {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX idx_employee_id (employee_id),
-      INDEX idx_check_in_date (DATE(check_in_time))
+      INDEX idx_check_in_time (check_in_time)
     )
   `);
 }
