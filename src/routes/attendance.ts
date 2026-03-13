@@ -15,28 +15,49 @@ async function ensureAttendanceTable(): Promise<void> {
     CREATE TABLE IF NOT EXISTS attendance (
       id INT AUTO_INCREMENT PRIMARY KEY,
       employee_id VARCHAR(255) NOT NULL,
+      date DATE NOT NULL,
       check_in_time DATETIME NOT NULL,
       check_out_time DATETIME,
       total_time VARCHAR(255),
       report TEXT,
+      status VARCHAR(50) DEFAULT 'checked_in',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX idx_employee_id (employee_id),
-      INDEX idx_check_in_time (check_in_time)
+      INDEX idx_check_in_time (check_in_time),
+      INDEX idx_date (date)
     )
   `);
+
+  // Migration: add missing columns if the table was previously created without them
+  try {
+    const [columns] = await pool.execute(`SHOW COLUMNS FROM attendance LIKE 'date'`);
+    if ((columns as any[]).length === 0) {
+      await pool.execute(`ALTER TABLE attendance ADD COLUMN date DATE AFTER employee_id`);
+      await pool.execute(`ALTER TABLE attendance ADD INDEX idx_date (date)`);
+      await pool.execute(`UPDATE attendance SET date = DATE(check_in_time) WHERE date IS NULL`);
+    }
+
+    const [statusColumns] = await pool.execute(`SHOW COLUMNS FROM attendance LIKE 'status'`);
+    if ((statusColumns as any[]).length === 0) {
+      await pool.execute(`ALTER TABLE attendance ADD COLUMN status VARCHAR(50) DEFAULT 'checked_in' AFTER report`);
+      await pool.execute(`UPDATE attendance SET status = CASE WHEN check_out_time IS NOT NULL THEN 'completed' ELSE 'checked_in' END`);
+    }
+  } catch (error) {
+    console.error('Error migrating attendance table:', error);
+  }
 }
 
 // POST /api/attendance/checkin - Record check-in time
 router.post('/checkin', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { employeeId, checkInTime } = req.body;
+    const { employeeId } = req.body;
 
     // Validate required fields
-    if (!employeeId || !checkInTime) {
+    if (!employeeId) {
       res.status(400).json({
         success: false,
-        message: 'Missing required fields: employeeId, checkInTime',
+        message: 'Missing required fields: employeeId',
       });
       return;
     }
@@ -90,10 +111,14 @@ router.post('/checkin', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Insert attendance record with check-in time
+    const now = new Date();
+    // Use ISO string to reliably extract current UTC date for the "date" column
+    const dateStr = now.toISOString().split('T')[0];
+
+    // Insert attendance record with check-in time, date, and initial status
     const [result] = await pool.execute(
-      `INSERT INTO attendance (employee_id, check_in_time) VALUES (?, ?)`,
-      [employeeId, checkInTime]
+      `INSERT INTO attendance (employee_id, date, check_in_time, status) VALUES (?, ?, ?, 'checked_in')`,
+      [employeeId, dateStr, now]
     );
 
     const insertId = (result as any).insertId;
@@ -105,7 +130,7 @@ router.post('/checkin', async (req: Request, res: Response): Promise<void> => {
         attendance: {
           id: insertId,
           employeeId,
-          checkInTime,
+          checkInTime: now.toISOString(),
         },
         hasCheckedIn: true,
         hasCompletedToday: false,
@@ -124,13 +149,13 @@ router.post('/checkin', async (req: Request, res: Response): Promise<void> => {
 // POST /api/attendance/checkout - Submit checkout with report
 router.post('/checkout', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { employeeId, checkInTime, checkOutTime, totalTime, report } = req.body;
+    const { employeeId, report } = req.body;
 
     // Validate required fields
-    if (!employeeId || !checkInTime || !checkOutTime || !totalTime || !report) {
+    if (!employeeId || !report) {
       res.status(400).json({
         success: false,
-        message: 'Missing required fields: employeeId, checkInTime, checkOutTime, totalTime, report',
+        message: 'Missing required fields: employeeId, report',
       });
       return;
     }
@@ -147,26 +172,53 @@ router.post('/checkout', async (req: Request, res: Response): Promise<void> => {
     // Ensure table exists
     await ensureAttendanceTable();
 
-    // Insert attendance record
-    const [result] = await pool.execute(
-      `INSERT INTO attendance (employee_id, check_in_time, check_out_time, total_time, report) 
-       VALUES (?, ?, ?, ?, ?)`,
-      [employeeId, checkInTime, checkOutTime, totalTime, report]
+    // Find the active check-in for today
+    const [existing] = await pool.execute(
+      `SELECT id, check_in_time FROM attendance 
+       WHERE employee_id = ? AND DATE(check_in_time) = CURDATE() 
+       AND check_out_time IS NULL
+       ORDER BY check_in_time DESC LIMIT 1`,
+      [employeeId]
     );
 
-    const insertId = (result as any).insertId;
+    const existingRecords = existing as any[];
+    if (existingRecords.length === 0) {
+      res.status(400).json({
+        success: false,
+        message: 'No active check-in found for today. Please refresh the page.',
+      });
+      return;
+    }
 
-    res.status(201).json({
+    const record = existingRecords[0];
+    const checkInDate = new Date(record.check_in_time);
+    const now = new Date();
+
+    // Calculate total time securely
+    const diffMs = now.getTime() - checkInDate.getTime();
+    const hours = Math.floor(diffMs / (1000 * 60 * 60));
+    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+    const serverTotalTime = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+    // Update existing attendance record safely with UPDATE instead of INSERT
+    await pool.execute(
+      `UPDATE attendance SET check_out_time = ?, total_time = ?, report = ?, status = 'completed' WHERE id = ?`,
+      [now, serverTotalTime, report, record.id]
+    );
+
+    res.status(200).json({
       success: true,
-      message: 'Attendance recorded successfully',
+      message: 'Checkout recorded successfully',
       data: {
         attendance: {
-          id: insertId,
+          id: record.id,
           employeeId,
-          checkInTime,
-          checkOutTime,
-          totalTime,
+          checkInTime: checkInDate.toISOString(),
+          checkOutTime: now.toISOString(),
+          totalTime: serverTotalTime,
           report,
+          status: 'completed',
           createdAt: new Date().toISOString(),
         },
       },
