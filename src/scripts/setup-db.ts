@@ -1,15 +1,25 @@
 // Database setup script - run this once to create the database
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
+import fs from 'fs';
+
 
 dotenv.config();
 
 async function setupDatabase() {
-  const config = {
+  const caPath = process.env.CA;
+  
+  const config: mysql.ConnectionOptions = {
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT || '3306', 10),
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME,
+    ...(caPath && {
+      ssl: {
+        ca: fs.readFileSync(caPath)
+      }
+    })
   };
 
   let connection: mysql.Connection | null = null;
