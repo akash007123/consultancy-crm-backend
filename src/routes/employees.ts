@@ -28,27 +28,27 @@ const createEmployeeSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
   email: z.string().email('Invalid email format'),
-  gender: z.enum(['male', 'female', 'other']).optional(),
-  dateOfBirth: z.string().optional(),
+  gender: z.enum(['male', 'female', 'other']).nullable().optional().or(z.literal('')),
+  dateOfBirth: z.string().nullable().optional().or(z.literal('')),
   joiningDate: z.string().min(1, 'Joining date is required'),
   department: z.string().min(1, 'Department is required'),
-  role: z.enum(['admin', 'manager', 'hr', 'employee']).optional(),
-  status: z.enum(['active', 'inactive']).optional(),
+  role: z.enum(['admin', 'manager', 'hr', 'employee']).nullable().optional().or(z.literal('')),
+  status: z.enum(['active', 'inactive']).nullable().optional().or(z.literal('')),
   mobile1: z.string().min(10, 'Mobile number is required'),
-  mobile2: z.string().optional(),
-  address: z.string().optional(),
-  bankAccountName: z.string().optional(),
-  bankAccountNumber: z.string().optional(),
-  bankName: z.string().optional(),
-  ifscCode: z.string().optional(),
-  bankAddress: z.string().optional(),
-  facebook: z.string().optional(),
-  twitter: z.string().optional(),
-  linkedin: z.string().optional(),
-  instagram: z.string().optional(),
-  otherSocial: z.string().optional(),
+  mobile2: z.string().nullable().optional(),
+  address: z.string().nullable().optional(),
+  bankAccountName: z.string().nullable().optional(),
+  bankAccountNumber: z.string().nullable().optional(),
+  bankName: z.string().nullable().optional(),
+  ifscCode: z.string().nullable().optional(),
+  bankAddress: z.string().nullable().optional(),
+  facebook: z.string().nullable().optional(),
+  twitter: z.string().nullable().optional(),
+  linkedin: z.string().nullable().optional(),
+  instagram: z.string().nullable().optional(),
+  otherSocial: z.string().nullable().optional(),
   password: z.string().min(6, 'Password must be at least 6 characters'),
-  profilePhoto: z.string().optional(),
+  profilePhoto: z.string().nullable().optional(),
 });
 
 // Validation schema for updating employee
@@ -58,28 +58,35 @@ const updateEmployeeSchema = z.object({
   firstName: z.string().min(1).optional(),
   lastName: z.string().min(1).optional(),
   email: z.string().email().optional(),
-  gender: z.enum(['male', 'female', 'other']).optional(),
-  dateOfBirth: z.string().optional(),
+  gender: z.enum(['male', 'female', 'other']).nullable().optional().or(z.literal('')),
+  dateOfBirth: z.string().nullable().optional().or(z.literal('')),
   joiningDate: z.string().optional(),
   department: z.string().optional(),
-  role: z.enum(['admin', 'manager', 'hr', 'employee']).optional(),
-  status: z.enum(['active', 'inactive']).optional(),
+  role: z.enum(['admin', 'manager', 'hr', 'employee']).nullable().optional().or(z.literal('')),
+  status: z.enum(['active', 'inactive']).nullable().optional().or(z.literal('')),
   mobile1: z.string().min(10).optional(),
-  mobile2: z.string().optional(),
-  address: z.string().optional(),
-  bankAccountName: z.string().optional(),
-  bankAccountNumber: z.string().optional(),
-  bankName: z.string().optional(),
-  ifscCode: z.string().optional(),
-  bankAddress: z.string().optional(),
-  facebook: z.string().optional(),
-  twitter: z.string().optional(),
-  linkedin: z.string().optional(),
-  instagram: z.string().optional(),
-  otherSocial: z.string().optional(),
+  mobile2: z.string().nullable().optional(),
+  address: z.string().nullable().optional(),
+  bankAccountName: z.string().nullable().optional(),
+  bankAccountNumber: z.string().nullable().optional(),
+  bankName: z.string().nullable().optional(),
+  ifscCode: z.string().nullable().optional(),
+  bankAddress: z.string().nullable().optional(),
+  facebook: z.string().nullable().optional(),
+  twitter: z.string().nullable().optional(),
+  linkedin: z.string().nullable().optional(),
+  instagram: z.string().nullable().optional(),
+  otherSocial: z.string().nullable().optional(),
   password: z.string().min(6).optional(),
-  profilePhoto: z.string().optional(),
+  profilePhoto: z.string().nullable().optional(),
 });
+
+// Format date helper function
+function formatDate(date: unknown): string {
+  if (!date) return '';
+  const d = new Date(date as string);
+  return isNaN(d.getTime()) ? '' : d.toISOString().split('T')[0];
+}
 
 // Format database row to EmployeeWithoutPassword
 function formatEmployee(row: Record<string, unknown>): EmployeeWithoutPassword {
@@ -90,8 +97,8 @@ function formatEmployee(row: Record<string, unknown>): EmployeeWithoutPassword {
     lastName: row.last_name as string,
     email: row.email as string,
     gender: row.gender as EmployeeWithoutPassword['gender'],
-    dateOfBirth: row.date_of_birth ? (row.date_of_birth as Date).toISOString().split('T')[0] : '',
-    joiningDate: row.joining_date ? (row.joining_date as Date).toISOString().split('T')[0] : '',
+    dateOfBirth: formatDate(row.date_of_birth),
+    joiningDate: formatDate(row.joining_date),
     department: row.department as string,
     role: row.role as EmployeeRole,
     status: row.status as EmployeeStatus,
@@ -180,6 +187,81 @@ router.get('/', authenticate, async (req: Request, res: Response, next: NextFunc
 });
 
 /**
+ * POST /api/employees/login
+ * Employee login with mobile and password
+ */
+router.post('/login', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { mobile, password } = req.body;
+
+    if (!mobile || !password) {
+      throw new AppError('Mobile and password are required', 400);
+    }
+
+    const pool = getPool();
+    const [rows] = await pool.execute(
+      'SELECT * FROM employees WHERE mobile1 = ?',
+      [mobile]
+    );
+
+    const employees = rows as Record<string, unknown>[];
+
+    if (employees.length === 0) {
+      throw new AppError('Invalid mobile number or password', 401);
+    }
+
+    const employee = employees[0];
+
+    // Check if employee is active
+    if (employee.status !== 'active') {
+      throw new AppError('Your account has been deactivated', 401);
+    }
+
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, employee.password as string);
+    if (!isValidPassword) {
+      throw new AppError('Invalid mobile number or password', 401);
+    }
+
+    const employeeWithoutPassword = formatEmployee(employee);
+    const token = generateToken(employeeWithoutPassword);
+
+    const response: ApiResponse = {
+      success: true,
+      message: 'Login successful',
+      data: {
+        employee: employeeWithoutPassword,
+        token,
+      },
+    };
+
+    res.status(200).json(response);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/employees/code/generate
+ * Generate new employee code
+ */
+router.get('/code/generate', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const pool = getPool();
+    const employeeCode = await generateEmployeeCode(pool);
+
+    const response: ApiResponse = {
+      success: true,
+      data: { employeeCode },
+    };
+
+    res.status(200).json(response);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * GET /api/employees/:id
  * Get single employee by ID
  */
@@ -212,7 +294,7 @@ router.get('/:id', authenticate, async (req: AuthenticatedRequest, res: Response
 
 /**
  * POST /api/employees
- * Create new employee
+ * Create new employee - FIXED VERSION
  */
 router.post('/', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
@@ -220,27 +302,45 @@ router.post('/', authenticate, async (req: AuthenticatedRequest, res: Response, 
     const validatedData = createEmployeeSchema.parse(req.body) as CreateEmployeeRequest;
     const pool = getPool();
 
-    // Check if employee with same email or mobile exists
-    const [existing] = await pool.execute(
-      'SELECT id FROM employees WHERE email = ? OR mobile1 = ? OR employee_code = ?',
-      [validatedData.email, validatedData.mobile1, validatedData.employeeCode]
+    // Check for each field individually to provide specific error messages
+    const [existingEmail] = await pool.execute(
+      'SELECT id FROM employees WHERE email = ?',
+      [validatedData.email]
     );
-
-    if ((existing as Array<{ id: number }>).length > 0) {
-      throw new AppError('Employee with this email, mobile or employee code already exists', 409);
+    
+    if ((existingEmail as Array<{ id: number }>).length > 0) {
+      throw new AppError('An employee with this email already exists', 409);
+    }
+    
+    const [existingMobile] = await pool.execute(
+      'SELECT id FROM employees WHERE mobile1 = ?',
+      [validatedData.mobile1]
+    );
+    
+    if ((existingMobile as Array<{ id: number }>).length > 0) {
+      throw new AppError('An employee with this mobile number already exists', 409);
+    }
+    
+    const [existingCode] = await pool.execute(
+      'SELECT id FROM employees WHERE employee_code = ?',
+      [validatedData.employeeCode]
+    );
+    
+    if ((existingCode as Array<{ id: number }>).length > 0) {
+      throw new AppError('An employee with this employee code already exists', 409);
     }
 
     // Hash password
     const hashedPassword = await bcrypt.hash(validatedData.password, 10);
 
-    // Insert new employee
+    // FIXED: Count the columns correctly - there are 25 columns, so we need 25 values
     const [result] = await pool.execute(
       `INSERT INTO employees (
         employee_code, first_name, last_name, email, gender, date_of_birth,
         joining_date, department, role, status, mobile1, mobile2, address,
         bank_account_name, bank_account_number, bank_name, ifsc_code, bank_address,
         facebook, twitter, linkedin, instagram, other_social, password, profile_photo
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         validatedData.employeeCode,
         validatedData.firstName,
@@ -267,6 +367,7 @@ router.post('/', authenticate, async (req: AuthenticatedRequest, res: Response, 
         validatedData.otherSocial || null,
         hashedPassword,
         validatedData.profilePhoto || null,
+        // Removed the extra value that was causing the error
       ]
     );
 
@@ -291,8 +392,10 @@ router.post('/', authenticate, async (req: AuthenticatedRequest, res: Response, 
     res.status(201).json(response);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      next(new AppError(error.errors[0].message, 400));
+      const errorMessages = error.errors.map(err => `${err.path.join('.')}: ${err.message}`).join(', ');
+      next(new AppError(errorMessages, 400));
     } else {
+      console.error('Error creating employee:', error);
       next(error);
     }
   }
@@ -350,11 +453,11 @@ router.put('/:id', authenticate, async (req: AuthenticatedRequest, res: Response
       updates.push('email = ?');
       params.push(validatedData.email);
     }
-    if (validatedData.gender) {
+    if (validatedData.gender !== undefined) {
       updates.push('gender = ?');
       params.push(validatedData.gender);
     }
-    if (validatedData.dateOfBirth) {
+    if (validatedData.dateOfBirth !== undefined) {
       updates.push('date_of_birth = ?');
       params.push(validatedData.dateOfBirth);
     }
@@ -435,6 +538,10 @@ router.put('/:id', authenticate, async (req: AuthenticatedRequest, res: Response
       params.push(await bcrypt.hash(validatedData.password, 10));
     }
 
+    // Always update updated_at timestamp
+    updates.push('updated_at = ?');
+    params.push(new Date());
+
     if (updates.length > 0) {
       params.push(id);
       await pool.execute(
@@ -460,7 +567,8 @@ router.put('/:id', authenticate, async (req: AuthenticatedRequest, res: Response
     res.status(200).json(response);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      next(new AppError(error.errors[0].message, 400));
+      const errorMessages = error.errors.map(err => `${err.path.join('.')}: ${err.message}`).join(', ');
+      next(new AppError(errorMessages, 400));
     } else {
       next(error);
     }
@@ -492,81 +600,6 @@ router.delete('/:id', authenticate, async (req: AuthenticatedRequest, res: Respo
     const response: ApiResponse = {
       success: true,
       message: 'Employee deleted successfully',
-    };
-
-    res.status(200).json(response);
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
- * POST /api/employees/login
- * Employee login with mobile and password
- */
-router.post('/login', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-  try {
-    const { mobile, password } = req.body;
-
-    if (!mobile || !password) {
-      throw new AppError('Mobile and password are required', 400);
-    }
-
-    const pool = getPool();
-    const [rows] = await pool.execute(
-      'SELECT * FROM employees WHERE mobile1 = ?',
-      [mobile]
-    );
-
-    const employees = rows as Record<string, unknown>[];
-
-    if (employees.length === 0) {
-      throw new AppError('Invalid mobile number or password', 401);
-    }
-
-    const employee = employees[0];
-
-    // Check if employee is active
-    if (employee.status !== 'active') {
-      throw new AppError('Your account has been deactivated', 401);
-    }
-
-    // Verify password
-    const isValidPassword = await bcrypt.compare(password, employee.password as string);
-    if (!isValidPassword) {
-      throw new AppError('Invalid mobile number or password', 401);
-    }
-
-    const employeeWithoutPassword = formatEmployee(employee);
-    const token = generateToken(employeeWithoutPassword);
-
-    const response: ApiResponse = {
-      success: true,
-      message: 'Login successful',
-      data: {
-        employee: employeeWithoutPassword,
-        token,
-      },
-    };
-
-    res.status(200).json(response);
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
- * GET /api/employees/code/generate
- * Generate new employee code
- */
-router.get('/code/generate', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-  try {
-    const pool = getPool();
-    const employeeCode = await generateEmployeeCode(pool);
-
-    const response: ApiResponse = {
-      success: true,
-      data: { employeeCode },
     };
 
     res.status(200).json(response);
