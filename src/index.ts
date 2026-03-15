@@ -13,6 +13,8 @@ import tasksRoutes from './routes/tasks';
 import candidatesRoutes from './routes/candidates';
 import jobPostsRoutes from './routes/jobPosts';
 import jobApplicationsRoutes from './routes/jobApplications';
+import expensesRoutes from './routes/expenses';
+import tadaRoutes from './routes/tada';
 import { errorHandler } from './middleware/errorHandler';
 
 // Load environment variables
@@ -46,6 +48,8 @@ app.use('/api/tasks', tasksRoutes);
 app.use('/api/candidates', candidatesRoutes);
 app.use('/api/job-posts', jobPostsRoutes);
 app.use('/api/job-applications', jobApplicationsRoutes);
+app.use('/api/expenses', expensesRoutes);
+app.use('/api/tada', tadaRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

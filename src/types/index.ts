@@ -298,3 +298,71 @@ export interface UpdateTaskRequest {
   dueDate?: string;
   status?: TaskStatus;
 }
+
+// Expense types
+export interface Expense {
+  id: number;
+  category: string;
+  amount: number;
+  description: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ExpenseWithoutRelations {
+  id: number;
+  category: string;
+  amount: number;
+  description: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface CreateExpenseRequest {
+  category: string;
+  amount: number;
+  description?: string;
+}
+
+export interface UpdateExpenseRequest extends Partial<CreateExpenseRequest> {
+  id: number;
+}
+
+// TA/DA types
+export type ApprovalStatus = 'Approved' | 'Pending (Manager)' | 'Pending (Admin)';
+
+export interface TADA {
+  id: number;
+  employeeId: number;
+  employeeName: string;
+  ta: number;
+  da: number;
+  total: number;
+  date: string;
+  approval: ApprovalStatus;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface TADAWithoutRelations {
+  id: number;
+  employee_id: number;
+  ta: number;
+  da: number;
+  date: string;
+  approval: ApprovalStatus;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface CreateTADARequest {
+  employeeId: number;
+  ta: number;
+  da: number;
+  date: string;
+  approval?: ApprovalStatus;
+}
+
+export interface UpdateTADARequest extends Partial<CreateTADARequest> {
+  id: number;
+}

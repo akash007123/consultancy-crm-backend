@@ -297,6 +297,37 @@ async function createTables(connection: mysql.PoolConnection): Promise<void> {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
+  // Expenses table
+  await connection.execute(`
+    CREATE TABLE IF NOT EXISTS expenses (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      category VARCHAR(255) NOT NULL,
+      amount DECIMAL(10, 2) NOT NULL,
+      description TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_category (category)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  // TA/DA table
+  await connection.execute(`
+    CREATE TABLE IF NOT EXISTS tada (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      employee_id INT NOT NULL,
+      ta DECIMAL(10, 2) NOT NULL DEFAULT 0,
+      da DECIMAL(10, 2) NOT NULL DEFAULT 0,
+      date DATE NOT NULL,
+      approval ENUM('Approved', 'Pending (Manager)', 'Pending (Admin)') NOT NULL DEFAULT 'Pending (Manager)',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_employee_id (employee_id),
+      INDEX idx_date (date),
+      INDEX idx_approval (approval),
+      FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
   console.log('Database tables verified/created');
 }
 
