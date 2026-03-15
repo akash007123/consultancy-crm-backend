@@ -192,6 +192,27 @@ async function createTables(connection: mysql.PoolConnection): Promise<void> {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
+  // Clients table
+  await connection.execute(`
+    CREATE TABLE IF NOT EXISTS clients (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      client_name VARCHAR(255) NOT NULL,
+      company_name VARCHAR(255) NOT NULL,
+      mobile VARCHAR(20) NOT NULL,
+      email VARCHAR(255),
+      industry VARCHAR(100),
+      address TEXT,
+      profile_photo LONGTEXT,
+      is_active BOOLEAN DEFAULT TRUE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_company_name (company_name),
+      INDEX idx_mobile (mobile),
+      INDEX idx_email (email),
+      INDEX idx_industry (industry)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
   console.log('Database tables verified/created');
 }
 

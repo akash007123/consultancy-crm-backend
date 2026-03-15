@@ -59,10 +59,10 @@ router.get('/', authenticate, async (req: AuthenticatedRequest, res: Response, n
     let query = `
       SELECT 
         v.*,
-        u.name as client_name,
+        c.client_name as client_name,
         CONCAT(e.first_name, ' ', e.last_name) as employee_name
       FROM visits v
-      LEFT JOIN users u ON v.client_id = u.id
+      LEFT JOIN clients c ON v.client_id = c.id
       LEFT JOIN employees e ON v.employee_id = e.id
       WHERE 1=1
     `;
@@ -113,10 +113,10 @@ router.get('/:id', authenticate, async (req: AuthenticatedRequest, res: Response
     const [rows] = await pool.execute<mysql.RowDataPacket[]>(
       `SELECT 
         v.*,
-        u.name as client_name,
+        c.client_name as client_name,
         CONCAT(e.first_name, ' ', e.last_name) as employee_name
       FROM visits v
-      LEFT JOIN users u ON v.client_id = u.id
+      LEFT JOIN clients c ON v.client_id = c.id
       LEFT JOIN employees e ON v.employee_id = e.id
       WHERE v.id = ?`,
       [id]
@@ -203,10 +203,10 @@ router.post('/', authenticate, async (req: AuthenticatedRequest, res: Response, 
     const [newVisitRows] = await pool.execute<mysql.RowDataPacket[]>(
       `SELECT 
         v.*,
-        u.name as client_name,
+        c.client_name as client_name,
         CONCAT(e.first_name, ' ', e.last_name) as employee_name
       FROM visits v
-      LEFT JOIN users u ON v.client_id = u.id
+      LEFT JOIN clients c ON v.client_id = c.id
       LEFT JOIN employees e ON v.employee_id = e.id
       WHERE v.id = ?`,
       [result.insertId]
@@ -267,7 +267,7 @@ router.put('/:id', authenticate, async (req: AuthenticatedRequest, res: Response
     // If clientId is being updated, verify it exists
     if (validatedData.clientId) {
       const [clientRows] = await pool.execute<mysql.RowDataPacket[]>(
-        'SELECT id FROM users WHERE id = ?',
+        'SELECT id FROM clients WHERE id = ?',
         [validatedData.clientId]
       );
       
@@ -345,10 +345,10 @@ router.put('/:id', authenticate, async (req: AuthenticatedRequest, res: Response
     const [updatedRows] = await pool.execute<mysql.RowDataPacket[]>(
       `SELECT 
         v.*,
-        u.name as client_name,
+        c.client_name as client_name,
         CONCAT(e.first_name, ' ', e.last_name) as employee_name
       FROM visits v
-      LEFT JOIN users u ON v.client_id = u.id
+      LEFT JOIN clients c ON v.client_id = c.id
       LEFT JOIN employees e ON v.employee_id = e.id
       WHERE v.id = ?`,
       [id]
@@ -421,12 +421,20 @@ router.get('/clients/list', authenticate, async (req: AuthenticatedRequest, res:
     const pool = getPool();
     
     const [rows] = await pool.execute<mysql.RowDataPacket[]>(
-      'SELECT id, name, email, mobile FROM users ORDER BY name ASC'
+      'SELECT id, client_name, company_name, email, mobile FROM clients WHERE is_active = 1 ORDER BY client_name ASC'
     );
+    
+    const clients = rows.map(row => ({
+      id: row.id,
+      name: row.client_name,
+      companyName: row.company_name,
+      email: row.email,
+      mobile: row.mobile
+    }));
     
     res.json({
       success: true,
-      data: { clients: rows }
+      data: { clients }
     });
   } catch (error) {
     next(error);

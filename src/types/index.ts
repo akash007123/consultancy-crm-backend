@@ -219,3 +219,32 @@ export interface VisitListItem {
   location: string;
   remarks: string | null;
 }
+
+// Client types
+export interface Client {
+  id: number;
+  clientName: string;
+  companyName: string;
+  mobile: string;
+  email: string | null;
+  industry: string | null;
+  address: string | null;
+  profilePhoto: string | null;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateClientRequest {
+  clientName: string;
+  companyName: string;
+  mobile: string;
+  email?: string;
+  industry?: string;
+  address?: string;
+  profilePhoto?: string;
+}
+
+export interface UpdateClientRequest extends Partial<CreateClientRequest> {
+  id: number;
+}
