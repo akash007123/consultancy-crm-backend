@@ -248,3 +248,53 @@ export interface CreateClientRequest {
 export interface UpdateClientRequest extends Partial<CreateClientRequest> {
   id: number;
 }
+
+// Task types
+export type TaskPriority = 'high' | 'medium' | 'low';
+export type TaskStatus = 'in-progress' | 'pending' | 'completed';
+
+export interface Task {
+  id: number;
+  title: string;
+  description: string | null;
+  priority: TaskPriority;
+  assigneeId: number;
+  assigneeName: string;
+  assignDate: string;
+  dueDate: string;
+  status: TaskStatus;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface TaskWithoutRelations {
+  id: number;
+  title: string;
+  description: string | null;
+  priority: TaskPriority;
+  assignee_id: number;
+  assign_date: string;
+  due_date: string;
+  status: TaskStatus;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface CreateTaskRequest {
+  title: string;
+  description?: string;
+  priority: TaskPriority;
+  assigneeId: number;
+  dueDate: string;
+  status?: TaskStatus;
+}
+
+export interface UpdateTaskRequest {
+  id?: number;
+  title?: string;
+  description?: string;
+  priority?: TaskPriority;
+  assigneeId?: number;
+  dueDate?: string;
+  status?: TaskStatus;
+}

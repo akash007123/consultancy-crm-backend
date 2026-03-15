@@ -213,6 +213,27 @@ async function createTables(connection: mysql.PoolConnection): Promise<void> {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
+  // Tasks table
+  await connection.execute(`
+    CREATE TABLE IF NOT EXISTS tasks (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      title VARCHAR(255) NOT NULL,
+      description TEXT,
+      priority ENUM('high', 'medium', 'low') NOT NULL DEFAULT 'medium',
+      assignee_id INT NOT NULL,
+      assign_date DATE NOT NULL,
+      due_date DATE NOT NULL,
+      status ENUM('in-progress', 'pending', 'completed') NOT NULL DEFAULT 'pending',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_assignee_id (assignee_id),
+      INDEX idx_priority (priority),
+      INDEX idx_status (status),
+      INDEX idx_due_date (due_date),
+      FOREIGN KEY (assignee_id) REFERENCES employees(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
   console.log('Database tables verified/created');
 }
 

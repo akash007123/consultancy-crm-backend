@@ -9,6 +9,7 @@ import employeeRoutes from './routes/employees';
 import attendanceRoutes from './routes/attendance';
 import visitsRoutes from './routes/visits';
 import clientsRoutes from './routes/clients';
+import tasksRoutes from './routes/tasks';
 import { errorHandler } from './middleware/errorHandler';
 
 // Load environment variables
@@ -38,6 +39,7 @@ app.use('/api/employees', employeeRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/visits', visitsRoutes);
 app.use('/api/clients', clientsRoutes);
+app.use('/api/tasks', tasksRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
