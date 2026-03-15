@@ -154,3 +154,68 @@ export interface CreateEmployeeRequest {
 export interface UpdateEmployeeRequest extends Partial<CreateEmployeeRequest> {
   id: number;
 }
+
+// Visit types
+export interface Visit {
+  id: number;
+  clientId: number;
+  clientName: string;
+  employeeId: number;
+  employeeName: string;
+  date: string;
+  checkInTime: string;
+  checkOutTime: string | null;
+  location: string;
+  remarks: string | null;
+  purpose: string | null;
+  outcome: string | null;
+  nextFollowup: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface VisitWithoutRelations {
+  id: number;
+  client_id: number;
+  employee_id: number;
+  date: string;
+  check_in_time: string;
+  check_out_time: string | null;
+  location: string;
+  remarks: string | null;
+  purpose: string | null;
+  outcome: string | null;
+  next_followup: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface CreateVisitRequest {
+  clientId: number;
+  employeeId: number;
+  date: string;
+  checkInTime: string;
+  checkOutTime?: string;
+  location: string;
+  remarks?: string;
+  purpose?: string;
+  outcome?: string;
+  nextFollowup?: string;
+}
+
+export interface UpdateVisitRequest extends Partial<CreateVisitRequest> {
+  id: number;
+}
+
+export interface VisitListItem {
+  id: number;
+  clientId: number;
+  clientName: string;
+  employeeId: number;
+  employeeName: string;
+  date: string;
+  checkIn: string;
+  checkOut: string | null;
+  location: string;
+  remarks: string | null;
+}

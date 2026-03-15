@@ -168,6 +168,30 @@ async function createTables(connection: mysql.PoolConnection): Promise<void> {
     // Ignore error if column doesn't exist or already LONGTEXT
   });
 
+  // Visits table
+  await connection.execute(`
+    CREATE TABLE IF NOT EXISTS visits (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      client_id INT NOT NULL,
+      employee_id INT NOT NULL,
+      date DATE NOT NULL,
+      check_in_time VARCHAR(20) NOT NULL,
+      check_out_time VARCHAR(20),
+      location VARCHAR(255) NOT NULL,
+      remarks TEXT,
+      purpose VARCHAR(255),
+      outcome VARCHAR(255),
+      next_followup DATE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_client_id (client_id),
+      INDEX idx_employee_id (employee_id),
+      INDEX idx_date (date),
+      FOREIGN KEY (client_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
   console.log('Database tables verified/created');
 }
 
