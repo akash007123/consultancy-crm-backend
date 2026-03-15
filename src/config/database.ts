@@ -234,6 +234,26 @@ async function createTables(connection: mysql.PoolConnection): Promise<void> {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
+  // Candidates table
+  await connection.execute(`
+    CREATE TABLE IF NOT EXISTS candidates (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      position VARCHAR(255) NOT NULL,
+      status ENUM('Shortlisted', 'Pending', 'Interview Scheduled', 'Applied', 'Offer Sent', 'Accepted Offer') NOT NULL DEFAULT 'Pending',
+      email VARCHAR(255),
+      phone VARCHAR(20),
+      resume_url TEXT,
+      notes TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_name (name),
+      INDEX idx_position (position),
+      INDEX idx_status (status),
+      INDEX idx_email (email)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
   console.log('Database tables verified/created');
 }
 
