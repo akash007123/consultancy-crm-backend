@@ -254,6 +254,49 @@ async function createTables(connection: mysql.PoolConnection): Promise<void> {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
+  // Job Posts table
+  await connection.execute(`
+    CREATE TABLE IF NOT EXISTS job_posts (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      title VARCHAR(255) NOT NULL,
+      date DATE NOT NULL,
+      type ENUM('Full-time', 'Part-time', 'Contract', 'Internship') NOT NULL,
+      location VARCHAR(255) NOT NULL,
+      experience VARCHAR(100) NOT NULL,
+      description TEXT NOT NULL,
+      position INT NOT NULL DEFAULT 1,
+      status ENUM('Active', 'Closed') NOT NULL DEFAULT 'Active',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_title (title),
+      INDEX idx_type (type),
+      INDEX idx_location (location),
+      INDEX idx_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  // Job Applications table
+  await connection.execute(`
+    CREATE TABLE IF NOT EXISTS job_applications (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      job_id INT NOT NULL,
+      job_title VARCHAR(255) NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      email VARCHAR(255),
+      mobile VARCHAR(20),
+      education VARCHAR(255),
+      address TEXT,
+      resume_url TEXT,
+      status VARCHAR(50) NOT NULL DEFAULT 'Applied',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_job_id (job_id),
+      INDEX idx_name (name),
+      INDEX idx_email (email),
+      INDEX idx_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
   console.log('Database tables verified/created');
 }
 

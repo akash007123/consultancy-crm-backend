@@ -11,6 +11,8 @@ import visitsRoutes from './routes/visits';
 import clientsRoutes from './routes/clients';
 import tasksRoutes from './routes/tasks';
 import candidatesRoutes from './routes/candidates';
+import jobPostsRoutes from './routes/jobPosts';
+import jobApplicationsRoutes from './routes/jobApplications';
 import { errorHandler } from './middleware/errorHandler';
 
 // Load environment variables
@@ -42,6 +44,8 @@ app.use('/api/visits', visitsRoutes);
 app.use('/api/clients', clientsRoutes);
 app.use('/api/tasks', tasksRoutes);
 app.use('/api/candidates', candidatesRoutes);
+app.use('/api/job-posts', jobPostsRoutes);
+app.use('/api/job-applications', jobApplicationsRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
