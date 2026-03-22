@@ -213,6 +213,26 @@ async function createTables(connection: mysql.PoolConnection): Promise<void> {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
+  // Contacts table
+  await connection.execute(`
+    CREATE TABLE IF NOT EXISTS contacts (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      first_name VARCHAR(100) NOT NULL,
+      last_name VARCHAR(100) NOT NULL,
+      email VARCHAR(255) NOT NULL,
+      phone VARCHAR(20) NOT NULL,
+      company_name VARCHAR(255),
+      message TEXT,
+      status ENUM('new', 'contacted', 'in-progress', 'resolved', 'closed') NOT NULL DEFAULT 'new',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_email (email),
+      INDEX idx_phone (phone),
+      INDEX idx_status (status),
+      INDEX idx_created_at (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
   // Tasks table
   await connection.execute(`
     CREATE TABLE IF NOT EXISTS tasks (

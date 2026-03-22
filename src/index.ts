@@ -22,6 +22,7 @@ import invoiceRoutes from './routes/invoices';
 import reportRoutes from './routes/reports';
 import dashboardRoutes from './routes/dashboard';
 import eventRoutes from './routes/events';
+import contactRoutes from './routes/contacts';
 import { errorHandler } from './middleware/errorHandler';
 
 // Load environment variables
@@ -64,6 +65,7 @@ app.use('/api/invoices', invoiceRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/events', eventRoutes);
+app.use('/api/contacts', contactRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

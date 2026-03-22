@@ -466,6 +466,55 @@ export interface UpdatePetrolAllowanceRequest extends Partial<CreatePetrolAllowa
   id: number;
 }
 
+// Contact types
+export type ContactStatus = 'new' | 'contacted' | 'in-progress' | 'resolved' | 'closed';
+
+export interface Contact {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  companyName: string | null;
+  message: string | null;
+  status: ContactStatus;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ContactWithoutRelations {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  company_name: string | null;
+  message: string | null;
+  status: ContactStatus;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface CreateContactRequest {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  companyName?: string;
+  message?: string;
+}
+
+export interface UpdateContactRequest {
+  id: number;
+  status?: ContactStatus;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  companyName?: string;
+  message?: string;
+}
+
 // Stock types
 export type StockStatus = 'In Stock' | 'Low Stock' | 'Out of Stock';
 
