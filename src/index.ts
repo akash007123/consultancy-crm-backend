@@ -20,6 +20,7 @@ import stockRoutes from './routes/stock';
 import stockTransactionRoutes from './routes/stockTransactions';
 import invoiceRoutes from './routes/invoices';
 import reportRoutes from './routes/reports';
+import dashboardRoutes from './routes/dashboard';
 import { errorHandler } from './middleware/errorHandler';
 
 // Load environment variables
@@ -60,6 +61,7 @@ app.use('/api/stock', stockRoutes);
 app.use('/api/stock-transactions', stockTransactionRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
