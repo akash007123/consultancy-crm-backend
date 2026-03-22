@@ -299,6 +299,66 @@ export interface UpdateTaskRequest {
   status?: TaskStatus;
 }
 
+// Event types
+export type EventType = 'meeting' | 'task' | 'reminder' | 'event';
+
+export interface CalendarEvent {
+  id: number;
+  title: string;
+  description: string | null;
+  eventDate: string;
+  eventTime: string | null;
+  endTime: string | null;
+  allDay: boolean;
+  type: EventType;
+  assignedTo: string | null;
+  location: string | null;
+  createdBy: number | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CalendarEventWithoutRelations {
+  id: number;
+  title: string;
+  description: string | null;
+  event_date: string;
+  event_time: string | null;
+  end_time: string | null;
+  all_day: boolean;
+  type: EventType;
+  assigned_to: string | null;
+  location: string | null;
+  created_by: number | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface CreateEventRequest {
+  title: string;
+  description?: string;
+  eventDate: string;
+  eventTime?: string;
+  endTime?: string;
+  allDay?: boolean;
+  type: EventType;
+  assignedTo?: string;
+  location?: string;
+}
+
+export interface UpdateEventRequest {
+  id: number;
+  title?: string;
+  description?: string;
+  eventDate?: string;
+  eventTime?: string;
+  endTime?: string;
+  allDay?: boolean;
+  type?: EventType;
+  assignedTo?: string;
+  location?: string;
+}
+
 // Expense types
 export interface Expense {
   id: number;

@@ -525,6 +525,28 @@ async function createTables(connection: mysql.PoolConnection): Promise<void> {
     console.log('Sample saved reports inserted');
   }
 
+  // Events table
+  await connection.execute(`
+    CREATE TABLE IF NOT EXISTS events (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      title VARCHAR(255) NOT NULL,
+      description TEXT,
+      event_date DATE NOT NULL,
+      event_time TIME,
+      end_time TIME,
+      all_day BOOLEAN DEFAULT FALSE,
+      type ENUM('meeting', 'task', 'reminder', 'event') NOT NULL DEFAULT 'event',
+      assigned_to VARCHAR(255),
+      location VARCHAR(255),
+      created_by INT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_event_date (event_date),
+      INDEX idx_type (type),
+      INDEX idx_created_by (created_by)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
   console.log('Database tables verified/created');
 }
 
