@@ -638,6 +638,7 @@ export interface UpdateReportRequest {
 export interface Invoice {
   id: number;
   invoiceNumber: string;
+  orderId: number | null;
   clientId: number;
   clientName: string;
   clientCompany: string;
@@ -645,6 +646,7 @@ export interface Invoice {
   dueDate: string | null;
   amount: number;
   tax: number;
+  discount: number;
   total: number;
   status: InvoiceStatus;
   items: InvoiceItem[];
@@ -666,11 +668,13 @@ export interface InvoiceItem {
 export interface InvoiceWithoutRelations {
   id: number;
   invoice_number: string;
+  order_id: number | null;
   client_id: number;
   date: string;
   due_date: string | null;
   amount: number;
   tax: number;
+  discount: number;
   total: number;
   status: InvoiceStatus;
   notes: string | null;
@@ -681,6 +685,7 @@ export interface InvoiceWithoutRelations {
 }
 
 export interface CreateInvoiceRequest {
+  orderId?: number;
   clientId: number;
   date: string;
   dueDate?: string;
@@ -690,11 +695,126 @@ export interface CreateInvoiceRequest {
     rate: number;
   }[];
   tax?: number;
+  discount?: number;
   notes?: string;
   paymentMethod?: PaymentMethod;
   status?: InvoiceStatus;
 }
 
 export interface UpdateInvoiceRequest extends Partial<CreateInvoiceRequest> {
+  id: number;
+}
+
+export interface PaymentUpdateRequest {
+  paymentMethod: PaymentMethod;
+  paidDate?: string;
+}
+
+// ==================== ORDER MANAGEMENT TYPES ====================
+
+export type OrderStatus = 'Pending' | 'Approved' | 'Dispatched' | 'Delivered' | 'Cancelled';
+
+export interface OrderProduct {
+  id: number;
+  productId: number;
+  productName: string;
+  quantity: number;
+  price: number;
+  subtotal: number;
+}
+
+export interface OrderStatusHistory {
+  status: OrderStatus;
+  changedAt: Date;
+  changedBy: number;
+  changedByName?: string;
+}
+
+export interface Order {
+  id: number;
+  orderNumber: string;
+  customerId: number;
+  customerName: string;
+  customerCompany?: string;
+  products: OrderProduct[];
+  totalAmount: number;
+  status: OrderStatus;
+  createdBy: number;
+  createdByName?: string;
+  updatedBy?: number;
+  statusHistory: OrderStatusHistory[];
+  notes?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface OrderWithoutRelations {
+  id: number;
+  order_number: string;
+  customer_id: number;
+  total_amount: number;
+  status: OrderStatus;
+  created_by: number;
+  updated_by: number | null;
+  notes: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface CreateOrderRequest {
+  customerId: number;
+  products: {
+    productId: number;
+    quantity: number;
+    price: number;
+  }[];
+  notes?: string;
+}
+
+export interface UpdateOrderRequest extends Partial<CreateOrderRequest> {
+  id: number;
+}
+
+export interface UpdateOrderStatusRequest {
+  status: OrderStatus;
+}
+
+// ==================== PRODUCT TYPES (extending stock) ====================
+
+export interface Product {
+  id: number;
+  name: string;
+  price: number;
+  stock: number;
+  unit: string;
+  description?: string;
+  minQuantity: number;
+  status: 'In Stock' | 'Low Stock' | 'Out of Stock';
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ProductWithoutRelations {
+  id: number;
+  name: string;
+  price: number;
+  stock: number;
+  unit: string;
+  description: string | null;
+  min_quantity: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface CreateProductRequest {
+  name: string;
+  price: number;
+  stock: number;
+  unit: string;
+  description?: string;
+  minQuantity?: number;
+}
+
+export interface UpdateProductRequest extends Partial<CreateProductRequest> {
   id: number;
 }

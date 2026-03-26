@@ -457,11 +457,13 @@ async function createTables(connection: mysql.PoolConnection): Promise<void> {
     CREATE TABLE IF NOT EXISTS invoices (
       id INT AUTO_INCREMENT PRIMARY KEY,
       invoice_number VARCHAR(50) UNIQUE NOT NULL,
+      order_id INT DEFAULT NULL,
       client_id INT NOT NULL,
       date DATE NOT NULL,
       due_date DATE,
       amount DECIMAL(10, 2) NOT NULL DEFAULT 0,
       tax DECIMAL(10, 2) NOT NULL DEFAULT 0,
+      discount DECIMAL(10, 2) NOT NULL DEFAULT 0,
       total DECIMAL(10, 2) NOT NULL DEFAULT 0,
       status ENUM('Pending', 'Paid', 'Cancelled') NOT NULL DEFAULT 'Pending',
       notes TEXT,
@@ -471,11 +473,24 @@ async function createTables(connection: mysql.PoolConnection): Promise<void> {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX idx_invoice_number (invoice_number),
       INDEX idx_client_id (client_id),
+      INDEX idx_order_id (order_id),
       INDEX idx_date (date),
       INDEX idx_status (status),
       FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+
+  // Add columns if they don't exist (for existing databases)
+  try {
+    await connection.execute(`ALTER TABLE invoices ADD COLUMN order_id INT DEFAULT NULL AFTER invoice_number`);
+  } catch (e) {
+    // Column already exists
+  }
+  try {
+    await connection.execute(`ALTER TABLE invoices ADD COLUMN discount DECIMAL(10, 2) NOT NULL DEFAULT 0 AFTER tax`);
+  } catch (e) {
+    // Column already exists
+  }
 
   // Invoice items table
   await connection.execute(`
@@ -517,6 +532,90 @@ async function createTables(connection: mysql.PoolConnection): Promise<void> {
       console.log('Sample invoices inserted');
     }
   }
+
+  // Products table (extending stock with pricing)
+  await connection.execute(`
+    CREATE TABLE IF NOT EXISTS products (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      price DECIMAL(10, 2) NOT NULL DEFAULT 0,
+      stock INT NOT NULL DEFAULT 0,
+      unit VARCHAR(50) NOT NULL DEFAULT 'piece',
+      description TEXT,
+      min_quantity INT DEFAULT 10,
+      is_active BOOLEAN DEFAULT TRUE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_name (name),
+      INDEX idx_is_active (is_active)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  // Insert sample products if empty
+  const [prodRows]: [any[], any] = await connection.execute('SELECT COUNT(*) as count FROM products');
+  if (prodRows[0].count === 0) {
+    await connection.execute(`
+      INSERT INTO products (name, price, stock, unit, description, min_quantity) VALUES
+      ('Laptop - Dell XPS 15', 89999, 25, 'piece', 'Dell XPS 15 - 16GB RAM, 512GB SSD', 5),
+      ('Laptop - MacBook Pro', 149999, 15, 'piece', 'MacBook Pro M3 - 16GB RAM, 512GB SSD', 3),
+      ('Mouse - Wireless', 899, 100, 'piece', 'Logitech MX Master 3 Wireless Mouse', 20),
+      ('Keyboard - Mechanical', 4999, 50, 'piece', 'Keychron K8 Pro Mechanical Keyboard', 10),
+      ('Monitor - 27 inch', 18999, 30, 'piece', 'LG UltraGear 27" 144Hz Monitor', 8),
+      ('Headphone - Noise Cancelling', 12999, 40, 'piece', 'Sony WH-1000XM5', 10),
+      ('USB-C Hub', 2499, 75, 'piece', 'Dockteck 7-in-1 USB-C Hub', 15),
+      ('Webcam - 4K', 8999, 20, 'piece', 'Logitech Brio 4K Webcam', 5)
+    `);
+    console.log('Sample products inserted');
+  }
+
+  // Orders table
+  await connection.execute(`
+    CREATE TABLE IF NOT EXISTS orders (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      order_number VARCHAR(50) UNIQUE NOT NULL,
+      customer_id INT NOT NULL,
+      total_amount DECIMAL(12, 2) NOT NULL DEFAULT 0,
+      status ENUM('Pending', 'Approved', 'Dispatched', 'Delivered', 'Cancelled') DEFAULT 'Pending',
+      notes TEXT,
+      created_by INT NOT NULL,
+      updated_by INT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_order_number (order_number),
+      INDEX idx_customer_id (customer_id),
+      INDEX idx_status (status),
+      INDEX idx_created_by (created_by),
+      FOREIGN KEY (customer_id) REFERENCES clients(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  // Order items table
+  await connection.execute(`
+    CREATE TABLE IF NOT EXISTS order_items (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      order_id INT NOT NULL,
+      product_id INT NOT NULL,
+      quantity INT NOT NULL,
+      price DECIMAL(10, 2) NOT NULL,
+      subtotal DECIMAL(12, 2) NOT NULL,
+      FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  // Order status history table
+  await connection.execute(`
+    CREATE TABLE IF NOT EXISTS order_status_history (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      order_id INT NOT NULL,
+      status VARCHAR(20) NOT NULL,
+      changed_by INT NOT NULL,
+      changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+      FOREIGN KEY (changed_by) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
 
   // Saved reports table
   await connection.execute(`

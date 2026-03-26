@@ -9,6 +9,7 @@ import {
   InvoiceItem,
   CreateInvoiceRequest,
   UpdateInvoiceRequest,
+  PaymentUpdateRequest,
   InvoiceStatus,
   PaymentMethod,
   ApiResponse
@@ -19,6 +20,7 @@ const router = Router();
 
 // Validation schema for creating invoice
 const createInvoiceSchema = z.object({
+  orderId: z.number().int().positive().optional(),
   clientId: z.number().int().positive('Client is required'),
   date: z.string().min(1, 'Date is required'),
   dueDate: z.string().optional(),
@@ -28,6 +30,7 @@ const createInvoiceSchema = z.object({
     rate: z.number().positive('Rate must be positive'),
   })).min(1, 'At least one item is required'),
   tax: z.number().min(0).optional().default(0),
+  discount: z.number().min(0).optional().default(0),
   notes: z.string().optional().default(''),
   paymentMethod: z.string().optional(),
   status: z.enum(['Pending', 'Paid', 'Cancelled']).optional().default('Pending'),
@@ -69,6 +72,16 @@ async function transformInvoice(row: InvoiceWithoutRelations, pool: mysql.Pool):
     [row.client_id]
   );
   
+  // Get order info if order_id exists
+  let orderNumber: string | null = null;
+  if (row.order_id) {
+    const [orderRows] = await pool.execute<mysql.RowDataPacket[]>(
+      'SELECT order_number FROM orders WHERE id = ?',
+      [row.order_id]
+    );
+    orderNumber = orderRows[0]?.order_number || null;
+  }
+  
   // Get invoice items
   const [itemRows] = await pool.execute<mysql.RowDataPacket[]>(
     'SELECT * FROM invoice_items WHERE invoice_id = ?',
@@ -86,6 +99,7 @@ async function transformInvoice(row: InvoiceWithoutRelations, pool: mysql.Pool):
   return {
     id: row.id,
     invoiceNumber: row.invoice_number,
+    orderId: row.order_id,
     clientId: row.client_id,
     clientName: clientRows[0]?.client_name || 'Unknown',
     clientCompany: clientRows[0]?.company_name || 'Unknown',
@@ -93,6 +107,7 @@ async function transformInvoice(row: InvoiceWithoutRelations, pool: mysql.Pool):
     dueDate: row.due_date,
     amount: parseFloat(row.amount.toString()),
     tax: parseFloat(row.tax.toString()),
+    discount: parseFloat(row.discount?.toString() || '0'),
     total: parseFloat(row.total.toString()),
     status: row.status,
     items,
@@ -170,6 +185,133 @@ router.get('/generate-number', authenticate, async (req: AuthenticatedRequest, r
   }
 });
 
+// POST /api/invoices/generate/:orderId - Generate invoice from order
+router.post('/generate/:orderId', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const pool = getPool();
+    const orderId = parseInt(req.params.orderId);
+    
+    if (isNaN(orderId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid order ID'
+      });
+    }
+    
+    // Check if order exists
+    const [orderRows] = await pool.execute<mysql.RowDataPacket[]>(
+      'SELECT * FROM orders WHERE id = ?',
+      [orderId]
+    );
+    
+    if (orderRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Order not found'
+      });
+    }
+    
+    const order = orderRows[0];
+    
+    // Check if order is approved
+    if (order.status !== 'Approved') {
+      return res.status(400).json({
+        success: false,
+        error: 'Order must be approved before generating invoice'
+      });
+    }
+    
+    // Check if invoice already exists for this order
+    const [existingInvoiceRows] = await pool.execute<mysql.RowDataPacket[]>(
+      'SELECT id FROM invoices WHERE order_id = ?',
+      [orderId]
+    );
+    
+    if (existingInvoiceRows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invoice already exists for this order'
+      });
+    }
+    
+    // Get order items
+    const [orderItemRows] = await pool.execute<mysql.RowDataPacket[]>(
+      'SELECT oi.*, p.name as product_name FROM order_items oi JOIN products p ON oi.product_id = p.id WHERE oi.order_id = ?',
+      [orderId]
+    );
+    
+    if (orderItemRows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Order has no items'
+      });
+    }
+    
+    // Transform order items to invoice items
+    const items = orderItemRows.map(item => ({
+      description: item.product_name,
+      quantity: item.quantity,
+      rate: parseFloat(item.price),
+    }));
+    
+    // Calculate subtotal
+    const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.rate), 0);
+    
+    // Get tax rate from request body or use default 18% (GST)
+    const taxRate = req.body.taxRate || 18;
+    const taxAmount = subtotal * (taxRate / 100);
+    
+    // Get discount from request body
+    const discount = req.body.discount || 0;
+    
+    // Calculate total
+    const total = subtotal + taxAmount - discount;
+    
+    // Generate invoice number
+    const invoiceNumber = await generateInvoiceNumber(pool);
+    
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Insert invoice
+    const [result] = await pool.execute<mysql.ResultSetHeader>(
+      `INSERT INTO invoices (invoice_number, order_id, client_id, date, due_date, amount, tax, discount, total, status, notes, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, NOW(), NOW())`,
+      [invoiceNumber, orderId, order.customer_id, today, req.body.dueDate || null, subtotal, taxAmount, discount, total, order.notes || null]
+    );
+    
+    // Insert invoice items
+    for (const item of items) {
+      const itemAmount = item.quantity * item.rate;
+      await pool.execute(
+        `INSERT INTO invoice_items (invoice_id, description, quantity, rate, amount) VALUES (?, ?, ?, ?, ?)`,
+        [result.insertId, item.description, item.quantity, item.rate, itemAmount]
+      );
+    }
+    
+    // Get the created invoice
+    const [newRows] = await pool.execute<mysql.RowDataPacket[]>(
+      'SELECT * FROM invoices WHERE id = ?',
+      [result.insertId]
+    );
+    
+    const invoice = await transformInvoice(newRows[0] as InvoiceWithoutRelations, pool);
+    
+    res.status(201).json({
+      success: true,
+      message: 'Invoice generated successfully',
+      data: {
+        invoice
+      }
+    });
+  } catch (error) {
+    console.error('Error generating invoice from order:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate invoice'
+    });
+  }
+});
+
 // GET /api/invoices/:id - Get single invoice by ID
 router.get('/:id', authenticate, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -243,16 +385,17 @@ router.post('/', authenticate, async (req: AuthenticatedRequest, res: Response) 
     // Calculate totals
     const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.rate), 0);
     const taxAmount = tax || 0;
-    const total = subtotal + taxAmount;
+    const discountAmount = validationResult.data.discount || 0;
+    const total = subtotal + taxAmount - discountAmount;
     
     // Generate invoice number
     const invoiceNumber = await generateInvoiceNumber(pool);
     
     // Insert invoice
     const [result] = await pool.execute<mysql.ResultSetHeader>(
-      `INSERT INTO invoices (invoice_number, client_id, date, due_date, amount, tax, total, status, notes, payment_method, paid_date, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
-      [invoiceNumber, clientId, date, dueDate || null, subtotal, taxAmount, total, status || 'Pending', notes || null, paymentMethod || null, status === 'Paid' ? date : null]
+      `INSERT INTO invoices (invoice_number, order_id, client_id, date, due_date, amount, tax, discount, total, status, notes, payment_method, paid_date, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+      [invoiceNumber, validationResult.data.orderId || null, clientId, date, dueDate || null, subtotal, taxAmount, discountAmount, total, status || 'Pending', notes || null, paymentMethod || null, status === 'Paid' ? date : null]
     );
     
     // Insert invoice items
@@ -434,6 +577,73 @@ router.put('/:id', authenticate, async (req: AuthenticatedRequest, res: Response
     res.status(500).json({
       success: false,
       error: 'Failed to update invoice'
+    });
+  }
+});
+
+// PUT /api/invoices/:id/pay - Update payment status
+router.put('/:id/pay', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const pool = getPool();
+    const invoiceId = parseInt(req.params.id);
+    
+    if (isNaN(invoiceId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid invoice ID'
+      });
+    }
+    
+    const { paymentMethod, paidDate } = req.body;
+    
+    if (!paymentMethod) {
+      return res.status(400).json({
+        success: false,
+        error: 'Payment method is required'
+      });
+    }
+    
+    // Check if invoice exists
+    const [existingRows] = await pool.execute<mysql.RowDataPacket[]>(
+      'SELECT * FROM invoices WHERE id = ?',
+      [invoiceId]
+    );
+    
+    if (existingRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Invoice not found'
+      });
+    }
+    
+    // Update invoice payment status
+    const paymentDate = paidDate || new Date().toISOString().split('T')[0];
+    
+    await pool.execute(
+      `UPDATE invoices SET status = 'Paid', payment_method = ?, paid_date = ?, updated_at = NOW() WHERE id = ?`,
+      [paymentMethod, paymentDate, invoiceId]
+    );
+    
+    // Get the updated invoice
+    const [rows] = await pool.execute<mysql.RowDataPacket[]>(
+      'SELECT * FROM invoices WHERE id = ?',
+      [invoiceId]
+    );
+    
+    const invoice = await transformInvoice(rows[0] as InvoiceWithoutRelations, pool);
+    
+    res.json({
+      success: true,
+      message: 'Payment recorded successfully',
+      data: {
+        invoice
+      }
+    });
+  } catch (error) {
+    console.error('Error recording payment:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to record payment'
     });
   }
 });
