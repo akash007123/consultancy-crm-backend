@@ -233,6 +233,81 @@ router.get('/expense-breakdown', authenticate, async (req: AuthenticatedRequest,
   }
 });
 
+// GET /api/dashboard/section-counts - Get counts for contacts, tasks, orders, products
+router.get('/section-counts', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const pool = getPool();
+    
+    // Get contacts count
+    const [contactsResult] = await pool.execute<mysql.RowDataPacket[]>(`
+      SELECT COUNT(*) as total FROM contacts
+    `);
+    
+    // Get tasks count
+    const [tasksResult] = await pool.execute<mysql.RowDataPacket[]>(`
+      SELECT COUNT(*) as total FROM tasks
+    `);
+    
+    // Get orders count
+    const [ordersResult] = await pool.execute<mysql.RowDataPacket[]>(`
+      SELECT COUNT(*) as total FROM orders
+    `);
+    
+    // Get products count
+    const [productsResult] = await pool.execute<mysql.RowDataPacket[]>(`
+      SELECT COUNT(*) as total FROM products WHERE is_active = 1
+    `);
+    
+    const sectionCounts = {
+      contacts: contactsResult[0]?.total || 0,
+      tasks: tasksResult[0]?.total || 0,
+      orders: ordersResult[0]?.total || 0,
+      products: productsResult[0]?.total || 0
+    };
+    
+    res.json({
+      success: true,
+      data: { sectionCounts }
+    });
+  } catch (error) {
+    console.error('Error fetching section counts:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch section counts' });
+  }
+});
+
+// GET /api/dashboard/recent-contacts - Get last 5 contacts
+router.get('/recent-contacts', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const pool = getPool();
+    
+    const [rows] = await pool.execute<mysql.RowDataPacket[]>(`
+      SELECT id, first_name, last_name, email, phone, company_name, status, created_at
+      FROM contacts
+      ORDER BY created_at DESC
+      LIMIT 5
+    `);
+    
+    const recentContacts = rows.map(row => ({
+      id: row.id,
+      firstName: row.first_name,
+      lastName: row.last_name,
+      email: row.email,
+      phone: row.phone,
+      companyName: row.company_name,
+      status: row.status,
+      createdAt: row.created_at
+    }));
+    
+    res.json({
+      success: true,
+      data: { recentContacts }
+    });
+  } catch (error) {
+    console.error('Error fetching recent contacts:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch recent contacts' });
+  }
+});
+
 export default router;
 
 // Import mysql type
