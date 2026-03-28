@@ -1,5 +1,6 @@
 // Dashboard statistics routes
 import { Router, Response } from 'express';
+import mysql from 'mysql2/promise';
 import { getPool } from '../config/database';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth';
 
@@ -309,6 +310,3 @@ router.get('/recent-contacts', authenticate, async (req: AuthenticatedRequest, r
 });
 
 export default router;
-
-// Import mysql type
-import mysql from 'mysql2/promise';

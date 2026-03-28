@@ -57,6 +57,7 @@ function formatUserResponse(user: {
   mobile: string;
   role: string;
   is_active: number;
+  profile_photo: string | null;
   created_at: Date;
   updated_at: Date;
 }): UserWithoutPassword {
@@ -67,6 +68,7 @@ function formatUserResponse(user: {
     mobile: user.mobile,
     role: user.role as UserWithoutPassword['role'],
     isActive: Boolean(user.is_active),
+    profilePhoto: user.profile_photo,
     createdAt: user.created_at,
     updatedAt: user.updated_at,
   };
@@ -97,6 +99,7 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
       password: string;
       role: string;
       is_active: number;
+      profile_photo: string | null;
       created_at: Date;
       updated_at: Date;
     }>;
@@ -185,6 +188,7 @@ router.post('/signup', async (req: Request, res: Response, next: NextFunction) =
       mobile: string;
       role: string;
       is_active: number;
+      profile_photo: string | null;
       created_at: Date;
       updated_at: Date;
     }>)[0];
@@ -310,6 +314,72 @@ router.put('/password', authenticate, async (req: AuthenticatedRequest, res: Res
     res.status(200).json(response);
   } catch (error) {
     next(error);
+  }
+});
+
+/**
+ * PUT /api/auth/profile
+ * Update user profile (protected route)
+ */
+router.put('/profile', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { name, email, mobile, profilePhoto } = req.body;
+
+    if (!name || !email || !mobile) {
+      throw new AppError('Name, email, and mobile are required', 400);
+    }
+
+    const pool = getPool();
+
+    // Check if email or mobile already exists for another user
+    const [existingUsers] = await pool.execute(
+      'SELECT id FROM users WHERE (email = ? OR mobile = ?) AND id != ?',
+      [email, mobile, req.user!.id]
+    );
+
+    if ((existingUsers as Array<{ id: number }>).length > 0) {
+      throw new AppError('User with this email or mobile already exists', 409);
+    }
+
+    // Update user profile
+    await pool.execute(
+      'UPDATE users SET name = ?, email = ?, mobile = ?, profile_photo = ?, updated_at = ? WHERE id = ?',
+      [name, email, mobile, profilePhoto || null, new Date(), req.user!.id]
+    );
+
+    // Get updated user
+    const [updatedRows] = await pool.execute(
+      'SELECT * FROM users WHERE id = ?',
+      [req.user!.id]
+    );
+
+    const updatedUser = (updatedRows as Array<{
+      id: number;
+      name: string;
+      email: string;
+      mobile: string;
+      role: string;
+      is_active: number;
+      profile_photo: string | null;
+      created_at: Date;
+      updated_at: Date;
+    }>)[0];
+
+    const userWithoutPassword = formatUserResponse(updatedUser);
+
+    const response: ApiResponse = {
+      success: true,
+      message: 'Profile updated successfully',
+      data: { user: userWithoutPassword },
+    };
+
+    res.status(200).json(response);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      next(new AppError(error.errors[0].message, 400));
+    } else {
+      next(error);
+    }
   }
 });
 

@@ -20,6 +20,7 @@ export interface UserWithoutPassword {
   mobile: string;
   role: UserRole;
   isActive: boolean;
+  profilePhoto: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -98,6 +98,7 @@ async function createTables(connection: mysql.PoolConnection): Promise<void> {
       password VARCHAR(255) NOT NULL,
       role ENUM('admin', 'sub-admin', 'manager', 'hr', 'employee') DEFAULT 'employee',
       is_active BOOLEAN DEFAULT TRUE,
+      profile_photo LONGTEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX idx_mobile (mobile),
@@ -166,6 +167,13 @@ async function createTables(connection: mysql.PoolConnection): Promise<void> {
     ALTER TABLE employees MODIFY COLUMN profile_photo LONGTEXT
   `).catch(() => {
     // Ignore error if column doesn't exist or already LONGTEXT
+  });
+
+  // Add profile_photo column to users table if it doesn't exist
+  await connection.execute(`
+    ALTER TABLE users ADD COLUMN profile_photo LONGTEXT
+  `).catch(() => {
+    // Ignore error if column already exists
   });
 
   // Visits table
