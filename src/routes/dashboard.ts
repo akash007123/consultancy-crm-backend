@@ -309,4 +309,175 @@ router.get('/recent-contacts', authenticate, async (req: AuthenticatedRequest, r
   }
 });
 
+// GET /api/dashboard/recent-activities - Get recent activities and feeds
+router.get('/recent-activities', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const pool = getPool();
+    const activities: Array<{
+      id: string;
+      type: string;
+      title: string;
+      description: string;
+      timestamp: string;
+      icon: string;
+      color: string;
+    }> = [];
+
+    // Get recent clients (last 5)
+    const [recentClients] = await pool.execute<mysql.RowDataPacket[]>(`
+      SELECT id, client_name, company_name, created_at
+      FROM clients
+      WHERE is_active = 1
+      ORDER BY created_at DESC
+      LIMIT 5
+    `);
+
+    recentClients.forEach(client => {
+      activities.push({
+        id: `client-${client.id}`,
+        type: 'client_added',
+        title: 'New client added',
+        description: `${client.client_name} from ${client.company_name || 'N/A'} was added`,
+        timestamp: client.created_at,
+        icon: 'Building2',
+        color: 'text-blue-500'
+      });
+    });
+
+    // Get recent attendance (last 5 check-ins/check-outs)
+    const [recentAttendance] = await pool.execute<mysql.RowDataPacket[]>(`
+      SELECT a.id, a.check_in_time, a.check_out_time, a.created_at,
+             e.first_name, e.last_name
+      FROM attendance a
+      JOIN employees e ON a.employee_id = e.id
+      ORDER BY a.created_at DESC
+      LIMIT 5
+    `);
+
+    recentAttendance.forEach(att => {
+      const employeeName = `${att.first_name} ${att.last_name}`;
+      if (att.check_out_time) {
+        activities.push({
+          id: `attendance-out-${att.id}`,
+          type: 'employee_checkout',
+          title: 'Employee clocked out',
+          description: `${employeeName} clocked out`,
+          timestamp: att.check_out_time,
+          icon: 'Clock',
+          color: 'text-orange-500'
+        });
+      } else {
+        activities.push({
+          id: `attendance-in-${att.id}`,
+          type: 'employee_checkin',
+          title: 'Employee clocked in',
+          description: `${employeeName} clocked in`,
+          timestamp: att.check_in_time,
+          icon: 'Clock',
+          color: 'text-green-500'
+        });
+      }
+    });
+
+    // Get recent invoices (last 5)
+    const [recentInvoices] = await pool.execute<mysql.RowDataPacket[]>(`
+      SELECT i.id, i.invoice_number, i.total, i.status, i.created_at, c.client_name
+      FROM invoices i
+      JOIN clients c ON i.client_id = c.id
+      ORDER BY i.created_at DESC
+      LIMIT 5
+    `);
+
+    recentInvoices.forEach(invoice => {
+      activities.push({
+        id: `invoice-${invoice.id}`,
+        type: 'invoice_generated',
+        title: 'Invoice generated',
+        description: `Invoice ${invoice.invoice_number} for ${invoice.client_name} - ₹${invoice.total}`,
+        timestamp: invoice.created_at,
+        icon: 'Receipt',
+        color: 'text-purple-500'
+      });
+    });
+
+    // Get low stock alerts (products with stock < min_quantity)
+    const [lowStockProducts] = await pool.execute<mysql.RowDataPacket[]>(`
+      SELECT id, name, stock, min_quantity, updated_at
+      FROM products
+      WHERE stock < min_quantity AND is_active = 1
+      ORDER BY stock ASC
+      LIMIT 5
+    `);
+
+    lowStockProducts.forEach(product => {
+      activities.push({
+        id: `stock-${product.id}`,
+        type: 'low_stock_alert',
+        title: 'Low stock alert',
+        description: `${product.name} has only ${product.stock} units left (min: ${product.min_quantity})`,
+        timestamp: product.updated_at,
+        icon: 'Package',
+        color: 'text-red-500'
+      });
+    });
+
+    // Get recent orders (last 5)
+    const [recentOrders] = await pool.execute<mysql.RowDataPacket[]>(`
+      SELECT o.id, o.order_number, o.total_amount, o.status, o.created_at, c.client_name
+      FROM orders o
+      JOIN clients c ON o.customer_id = c.id
+      ORDER BY o.created_at DESC
+      LIMIT 5
+    `);
+
+    recentOrders.forEach(order => {
+      activities.push({
+        id: `order-${order.id}`,
+        type: 'order_placed',
+        title: 'New order placed',
+        description: `Order ${order.order_number} from ${order.client_name} - ₹${order.total_amount}`,
+        timestamp: order.created_at,
+        icon: 'ShoppingCart',
+        color: 'text-indigo-500'
+      });
+    });
+
+    // Get recent tasks (last 5)
+    const [recentTasks] = await pool.execute<mysql.RowDataPacket[]>(`
+      SELECT id, title, status, created_at
+      FROM tasks
+      ORDER BY created_at DESC
+      LIMIT 5
+    `);
+
+    recentTasks.forEach(task => {
+      activities.push({
+        id: `task-${task.id}`,
+        type: 'task_created',
+        title: 'New task created',
+        description: `Task "${task.title}" was created`,
+        timestamp: task.created_at,
+        icon: 'CheckSquare',
+        color: 'text-teal-500'
+      });
+    });
+
+    // Sort all activities by timestamp (most recent first)
+    activities.sort((a, b) => 
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+
+    // Return top 15 activities
+    const recentActivities = activities.slice(0, 15);
+
+    res.json({
+      success: true,
+      data: { recentActivities }
+    });
+  } catch (error) {
+    console.error('Error fetching recent activities:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch recent activities' });
+  }
+});
+
 export default router;
